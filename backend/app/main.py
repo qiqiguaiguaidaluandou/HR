@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
 
 from app.api.v1 import api_router
 from app.db.database import init_db
@@ -20,6 +23,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Create static files directory for generated images
+os.makedirs(settings.IMAGE_STORAGE_PATH, exist_ok=True)
+app.mount("/images", StaticFiles(directory=settings.IMAGE_STORAGE_PATH), name="images")
 
 # Include API router
 app.include_router(api_router, prefix="/api/v1")

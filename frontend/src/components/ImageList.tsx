@@ -5,10 +5,10 @@ import { ImageCard } from './ImageCard';
 interface ImageItem {
   id: number;
   prompt: string;
-  imageUrl: string;
-  aspectRatio: string;
-  createdAt: string;
-  isFavorite: boolean;
+  image_url: string;
+  aspect_ratio: string;
+  created_at: string;
+  is_favorite: boolean;
 }
 
 interface ImageListProps {

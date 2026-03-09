@@ -25,6 +25,11 @@ services:
       - DATABASE_URL=postgresql://postgres:password@db:5432/ai_image_db
       - SECRET_KEY=your-super-secret-key-change-in-production
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - BANANA_API_KEY=${BANANA_API_KEY:-}
+      - BANANA_MODEL_KEY=${BANANA_MODEL_KEY:-stable-diffusion-v1-5}
+      - IMAGE_STORAGE_PATH=/app/generated_images
+    volumes:
+      - generated_images:/app/generated_images
     depends_on:
       - db
     restart: unless-stopped
@@ -44,3 +49,4 @@ services:
 
 volumes:
   postgres_data:
+  generated_images:

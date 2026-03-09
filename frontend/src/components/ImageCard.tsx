@@ -4,10 +4,10 @@ import { Bookmark, Trash2, Download } from 'lucide-react';
 interface ImageItem {
   id: number;
   prompt: string;
-  imageUrl: string;
-  aspectRatio: string;
-  createdAt: string;
-  isFavorite: boolean;
+  image_url: string;
+  aspect_ratio: string;
+  created_at: string;
+  is_favorite: boolean;
 }
 
 interface ImageCardProps {
@@ -17,12 +17,23 @@ interface ImageCardProps {
 }
 
 export function ImageCard({ image, onToggleFavorite, onDelete }: ImageCardProps) {
+  const handleDownload = () => {
+    // For local images, construct full URL
+    const imageUrl = image.image_url.startsWith('/images/')
+      ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${image.image_url}`
+      : image.image_url;
+
+    window.open(imageUrl, '_blank');
+  };
+
   return (
     <div className="group relative bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all">
       {/* 图片 */}
       <div className="aspect-square bg-gray-100 relative overflow-hidden">
         <img
-          src={image.imageUrl}
+          src={image.image_url.startsWith('/images/')
+            ? `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}${image.image_url}`
+            : image.image_url}
           alt={image.prompt}
           className="w-full h-full object-cover"
         />
@@ -31,11 +42,12 @@ export function ImageCard({ image, onToggleFavorite, onDelete }: ImageCardProps)
           <button
             onClick={() => onToggleFavorite(image.id)}
             className="p-2 bg-white/90 rounded-lg hover:bg-white transition-colors"
-            title={image.isFavorite ? "取消收藏" : "收藏"}
+            title={image.is_favorite ? "取消收藏" : "收藏"}
           >
-            <Bookmark size={18} className={image.isFavorite ? "fill-indigo-600 text-indigo-600" : "text-gray-700"} />
+            <Bookmark size={18} className={image.is_favorite ? "fill-indigo-600 text-indigo-600" : "text-gray-700"} />
           </button>
           <button
+            onClick={handleDownload}
             className="p-2 bg-white/90 rounded-lg hover:bg-white transition-colors"
             title="下载"
           >
@@ -54,8 +66,8 @@ export function ImageCard({ image, onToggleFavorite, onDelete }: ImageCardProps)
       <div className="p-3">
         <p className="text-sm text-gray-600 truncate">{image.prompt}</p>
         <div className="flex items-center justify-between mt-2">
-          <span className="text-xs text-gray-400">{image.aspectRatio}</span>
-          <span className="text-xs text-gray-400">{image.createdAt}</span>
+          <span className="text-xs text-gray-400">{image.aspect_ratio}</span>
+          <span className="text-xs text-gray-400">{new Date(image.created_at).toLocaleString('zh-CN')}</span>
         </div>
       </div>
     </div>

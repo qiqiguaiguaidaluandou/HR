@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { Image as ImageIcon, Settings, History, Bookmark, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Image as ImageIcon, History, Bookmark, Loader2 } from 'lucide-react';
 import { SidebarItem } from '@/components/SidebarItem';
 import { AspectRatioButton } from '@/components/AspectRatioButton';
 import { DescriptionInput } from '@/components/DescriptionInput';
@@ -11,50 +11,94 @@ import { GenerateButton } from '@/components/GenerateButton';
 import { GalleryHeader } from '@/components/GalleryHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { ImageList } from '@/components/ImageList';
+import { api } from '@/lib/api';
 
-// 模拟数据
 interface ImageItem {
   id: number;
   prompt: string;
-  imageUrl: string;
-  aspectRatio: string;
-  createdAt: string;
-  isFavorite: boolean;
+  image_url: string;
+  aspect_ratio: string;
+  created_at: string;
+  is_favorite: boolean;
 }
-
-const mockImages: ImageItem[] = [
-  { id: 1, prompt: "一只可爱的橘猫在阳光下玩耍", imageUrl: "https://picsum.photos/400/400?random=1", aspectRatio: "1:1", createdAt: "2024-01-15 10:30", isFavorite: true },
-  { id: 2, prompt: " sunset over the ocean", imageUrl: "https://picsum.photos/400/400?random=2", aspectRatio: "16:9", createdAt: "2024-01-14 15:20", isFavorite: false },
-  { id: 3, prompt: "未来城市科技感", imageUrl: "https://picsum.photos/400/400?random=3", aspectRatio: "9:16", createdAt: "2024-01-13 09:45", isFavorite: true },
-  { id: 4, prompt: "山水画风景", imageUrl: "https://picsum.photos/400/400?random=4", aspectRatio: "3:2", createdAt: "2024-01-12 14:00", isFavorite: false },
-  { id: 5, prompt: "抽象艺术风格", imageUrl: "https://picsum.photos/400/400?random=5", aspectRatio: "1:1", createdAt: "2024-01-11 18:30", isFavorite: true },
-  { id: 6, prompt: "可爱的小狗", imageUrl: "https://picsum.photos/400/400?random=6", aspectRatio: "4:3", createdAt: "2024-01-10 11:15", isFavorite: false },
-];
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState('generate');
   const [description, setDescription] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [imageCount, setImageCount] = useState(1);
-  const [images, setImages] = useState<ImageItem[]>(mockImages);
+  const [images, setImages] = useState<ImageItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const aspectRatios = ['1:1', '4:3', '3:4', '3:2', '16:9', '9:16'];
 
-  // 切换收藏状态
-  const handleToggleFavorite = (id: number) => {
-    setImages(prev => prev.map(img =>
-      img.id === id ? { ...img, isFavorite: !img.isFavorite } : img
-    ));
+  // Load images from API
+  const loadImages = async (favoriteOnly: boolean = false) => {
+    setIsLoading(true);
+    try {
+      const response = await api.getImages(favoriteOnly);
+      setImages(response.images || []);
+    } catch (error) {
+      console.error('Failed to load images:', error);
+      setImages([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // 删除图片
-  const handleDelete = (id: number) => {
-    setImages(prev => prev.filter(img => img.id !== id));
+  // Load images when tab changes
+  useEffect(() => {
+    if (activeTab === 'history' || activeTab === 'bookmarks') {
+      loadImages(activeTab === 'bookmarks');
+    }
+  }, [activeTab]);
+
+  // Generate images
+  const handleGenerate = async () => {
+    if (!description.trim()) return;
+
+    setIsGenerating(true);
+    try {
+      const response = await api.generateImages(description, aspectRatio, imageCount);
+      if (response.images && response.images.length > 0) {
+        setImages(prev => [...response.images, ...prev]);
+        setActiveTab('history');
+        setDescription('');
+      }
+    } catch (error) {
+      console.error('Failed to generate images:', error);
+      alert('图片生成失败，请稍后重试');
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  // 获取收藏的图片
-  const favoriteImages = images.filter(img => img.isFavorite);
+  // Toggle favorite
+  const handleToggleFavorite = async (id: number) => {
+    try {
+      await api.toggleFavorite(id);
+      setImages(prev => prev.map(img =>
+        img.id === id ? { ...img, is_favorite: !img.is_favorite } : img
+      ));
+    } catch (error) {
+      console.error('Failed to toggle favorite:', error);
+    }
+  };
 
-  // 渲染右侧内容
+  // Delete image
+  const handleDelete = async (id: number) => {
+    try {
+      await api.deleteImage(id);
+      setImages(prev => prev.filter(img => img.id !== id));
+    } catch (error) {
+      console.error('Failed to delete image:', error);
+    }
+  };
+
+  // Get favorite images
+  const favoriteImages = images.filter(img => img.is_favorite);
+
+  // Render content
   const renderContent = () => {
     if (activeTab === 'generate') {
       return (
@@ -70,12 +114,18 @@ export default function Home() {
             <h2 className="text-lg font-semibold text-gray-800">生成历史</h2>
             <span className="ml-2 text-sm text-gray-400">({images.length}张)</span>
           </div>
-          <ImageList
-            images={images}
-            emptyText="暂无生成记录"
-            onToggleFavorite={handleToggleFavorite}
-            onDelete={handleDelete}
-          />
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+            </div>
+          ) : (
+            <ImageList
+              images={images}
+              emptyText="暂无生成记录"
+              onToggleFavorite={handleToggleFavorite}
+              onDelete={handleDelete}
+            />
+          )}
         </>
       );
     } else if (activeTab === 'bookmarks') {
@@ -85,12 +135,18 @@ export default function Home() {
             <h2 className="text-lg font-semibold text-gray-800">我的收藏</h2>
             <span className="ml-2 text-sm text-gray-400">({favoriteImages.length}张)</span>
           </div>
-          <ImageList
-            images={favoriteImages}
-            emptyText="暂无收藏图片"
-            onToggleFavorite={handleToggleFavorite}
-            onDelete={handleDelete}
-          />
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+            </div>
+          ) : (
+            <ImageList
+              images={favoriteImages}
+              emptyText="暂无收藏图片"
+              onToggleFavorite={handleToggleFavorite}
+              onDelete={handleDelete}
+            />
+          )}
         </>
       );
     }
@@ -99,15 +155,12 @@ export default function Home() {
 
   return (
     <div className="flex h-screen bg-gray-50 text-gray-800 font-sans overflow-hidden">
-      <aside className="w-20 flex flex-col items-center py-6 gap-6 border-r border-gray-200 bg-gray-100">
+      <aside className="w-20 flex flex-col items-center py-6 gap-6 border-r border-gray-200 bg-white">
         <div className="flex flex-col gap-4 flex-1">
           <SidebarItem icon={<ImageIcon size={22} />} label="图片生成" active={activeTab === 'generate'} onClick={() => setActiveTab('generate')} />
           <SidebarItem icon={<History size={22} />} label="生成历史" active={activeTab === 'history'} onClick={() => setActiveTab('history')} />
           <SidebarItem icon={<Bookmark size={22} />} label="我的收藏" active={activeTab === 'bookmarks'} onClick={() => setActiveTab('bookmarks')} />
         </div>
-        {/* <div className="flex flex-col gap-4">
-          <SidebarItem icon={<Settings size={22} />} label="系统设置" />
-        </div> */}
       </aside>
       <main className="flex-1 flex overflow-hidden">
         {activeTab === 'generate' && (
@@ -122,7 +175,7 @@ export default function Home() {
                 </div>
               </div>
               <ImageCountSelector value={imageCount} onChange={setImageCount} />
-              <GenerateButton />
+              <GenerateButton onClick={handleGenerate} isLoading={isGenerating} disabled={!description.trim() || isGenerating} />
             </div>
           </section>
         )}

@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     # Gemini API
     GEMINI_API_KEY: Optional[str] = None
 
+    # Banana.dev API (Stable Diffusion)
+    BANANA_API_KEY: Optional[str] = None
+    BANANA_MODEL_KEY: str = "stable-diffusion-v1-5"
+
+    # Image storage
+    IMAGE_STORAGE_PATH: str = "./generated_images"
+
     # App
     APP_NAME: str = "AI Image Generator"
     DEBUG: bool = True

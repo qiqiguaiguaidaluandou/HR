@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from typing import Optional
 import os
 import uuid
+import base64
+import httpx
 
 from app.db.database import get_db
 from app.models.user import User
@@ -14,12 +16,9 @@ from app.schemas.image import (
     ImageListResponse
 )
 from app.core.security import decode_token, oauth2_scheme
-import google.generativeai as genai
+from app.core.config import settings
 
 router = APIRouter(prefix="/images", tags=["Images"])
-
-# Configure Gemini
-genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
 
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
@@ -40,53 +39,123 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 
+def save_base64_image(base64_data: str, filename: str) -> str:
+    """Save base64 encoded image to storage and return the URL"""
+    # Create storage directory if not exists
+    storage_path = settings.IMAGE_STORAGE_PATH
+    os.makedirs(storage_path, exist_ok=True)
+
+    # Save file
+    file_path = os.path.join(storage_path, filename)
+    image_data = base64.b64decode(base64_data)
+    with open(file_path, "wb") as f:
+        f.write(image_data)
+
+    # Return URL (in production, use cloud storage or static file server)
+    return f"/images/{filename}"
+
+
+async def generate_image_with_banana(prompt: str, width: int = 1024, height: int = 1024) -> Optional[str]:
+    """Generate image using Banana.dev API"""
+    if not settings.BANANA_API_KEY or settings.BANANA_API_KEY == "your-banana-api-key":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Banana API key not configured"
+        )
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                "https://api.banana.dev/api/v4/inference/stable-diffusion",
+                json={
+                    "api_key": settings.BANANA_API_KEY,
+                    "model_key": settings.BANANA_MODEL_KEY,
+                    "prompt": prompt,
+                    "width": width,
+                    "height": height,
+                    "num_inference_steps": 25,
+                    "guidance_scale": 7.5
+                },
+                timeout=120.0
+            )
+
+            if response.status_code != 200:
+                print(f"Banana API error: {response.status_code} - {response.text}")
+                return None
+
+            result = response.json()
+
+            # Banana API returns base64 encoded image
+            if result.get("outputs") and len(result["outputs"]) > 0:
+                return result["outputs"][0]  # Base64 image data
+
+            return None
+
+        except Exception as e:
+            print(f"Error calling Banana API: {e}")
+            return None
+
+
 @router.post("/generate", response_model=ImageListResponse)
-def generate_images(
+async def generate_images(
     request: ImageGenerateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Generate images using Gemini API"""
+    """Generate images using Banana.dev Stable Diffusion API"""
     images = []
 
-    # Map aspect ratios to Gemini dimensions
+    # Map aspect ratios to dimensions
     aspect_ratios = {
-        "1:1": (1024, 1024),
-        "4:3": (1024, 768),
-        "3:4": (768, 1024),
-        "3:2": (1024, 683),
-        "16:9": (1024, 576),
-        "9:16": (576, 1024)
+        "1:1": (512, 512),
+        "4:3": (512, 384),
+        "3:4": (384, 512),
+        "3:2": (512, 341),
+        "16:9": (512, 288),
+        "9:16": (288, 512)
     }
 
-    width, height = aspect_ratios.get(request.aspect_ratio, (1024, 1024))
+    width, height = aspect_ratios.get(request.aspect_ratio, (512, 512))
 
     # Generate images
     for i in range(request.image_count):
         try:
-            # Use Gemini to generate image description/code
-            model = genai.GenerativeModel('gemini-pro-vision')
-
-            # For now, we'll create a placeholder response
-            # In production, you would integrate with an image generation API
-            response = model.generate_content(
-                f"Generate an image description for: {request.prompt}"
-            )
-
-            # Create image record (placeholder URL for now)
-            new_image = Image(
-                user_id=current_user.id,
+            # Call Banana API to generate image
+            base64_image = await generate_image_with_banana(
                 prompt=request.prompt,
-                image_url=f"https://placeholder.com/image_{uuid.uuid4().hex[:8]}.png",
-                aspect_ratio=request.aspect_ratio,
-                is_favorite=False
+                width=width,
+                height=height
             )
-            db.add(new_image)
-            images.append(new_image)
+
+            if base64_image:
+                # Save image to storage
+                filename = f"{uuid.uuid4().hex}.png"
+                image_url = save_base64_image(base64_image, filename)
+
+                # Create image record
+                new_image = Image(
+                    user_id=current_user.id,
+                    prompt=request.prompt,
+                    image_url=image_url,
+                    aspect_ratio=request.aspect_ratio,
+                    is_favorite=False
+                )
+                db.add(new_image)
+                images.append(new_image)
+            else:
+                # Create placeholder if generation fails
+                new_image = Image(
+                    user_id=current_user.id,
+                    prompt=request.prompt,
+                    image_url=f"https://placeholder.com/{width}x{height}?text=Generation+Failed",
+                    aspect_ratio=request.aspect_ratio,
+                    is_favorite=False
+                )
+                db.add(new_image)
+                images.append(new_image)
 
         except Exception as e:
-            # Continue even if one generation fails
-            print(f"Error generating image: {e}")
+            print(f"Error generating image {i+1}: {e}")
             continue
 
     db.commit()
@@ -160,6 +229,13 @@ def delete_image(
             detail="Image not found"
         )
 
+    # Delete local file if exists
+    if image.image_url and image.image_url.startswith("/images/"):
+        filename = image.image_url.replace("/images/", "")
+        file_path = os.path.join(settings.IMAGE_STORAGE_PATH, filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
     db.delete(image)
     db.commit()
     return {"message": "Image deleted successfully"}
@@ -178,13 +254,16 @@ async def upload_reference_image(
             detail="File must be an image"
         )
 
-    # Save file (in production, upload to cloud storage)
-    file_ext = file.filename.split(".")[-1]
-    file_name = f"{uuid.uuid4().hex}.{file_ext}"
-    file_path = f"/tmp/{file_name}"
+    # Save file to storage
+    storage_path = settings.IMAGE_STORAGE_PATH
+    os.makedirs(storage_path, exist_ok=True)
+
+    file_ext = file.filename.split(".")[-1] if file.filename else "png"
+    file_name = f"ref_{uuid.uuid4().hex}.{file_ext}"
+    file_path = os.path.join(storage_path, file_name)
 
     with open(file_path, "wb") as f:
         content = await file.read()
         f.write(content)
 
-    return {"url": file_path, "filename": file_name}
+    return {"url": f"/images/{file_name}", "filename": file_name}
