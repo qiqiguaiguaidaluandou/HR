@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init -y)",
+      "Bash(npm install)",
+      "Bash(timeout 30 npm run dev)",
+      "Bash(npm run build)",
+      "Bash(npx next build)",
+      "Bash(npm install js-cookie jwt-decode)",
+      "Bash(mv src frontend/)",
+      "Bash(mv package.json frontend/)",
+      "Bash(mv next.config.js frontend/)",
+      "Bash(mv tailwind.config.js frontend/)",
+      "Bash(mv tsconfig.json frontend/)",
+      "Bash(mv postcss.config.js frontend/)",
+      "Bash(mv next-env.d.ts frontend/)",
+      "Bash(cp -r src/* frontend/)",
+      "Bash(cp package.json frontend/)",
+      "Bash(cp next.config.js frontend/)",
+      "Bash(cp tailwind.config.js frontend/)",
+      "Bash(cp tsconfig.json frontend/)",
+      "Bash(cp postcss.config.js frontend/)",
+      "Bash(cp next-env.d.ts frontend/)",
+      "Bash(mv docker-compose.yml docker/)",
+      "Bash(mv Dockerfile docker/frontend-dockerfile)",
+      "Bash(rm -rf app components contexts lib)",
+      "Bash(mkdir -p src/app src/components src/contexts src/lib)",
+      "Bash(npx tsc --noEmit)"
+    ]
+  }
+}
