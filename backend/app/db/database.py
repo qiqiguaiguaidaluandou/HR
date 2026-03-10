@@ -19,23 +19,26 @@ def get_db():
 
 def init_db():
     from app.models import user, image
-    from app.core.security import get_password_hash
 
     Base.metadata.create_all(bind=engine)
 
-    # Create default admin user if not exists
-    db = SessionLocal()
-    try:
-        admin_user = db.query(user.User).filter(user.User.username == "admin").first()
-        if not admin_user:
-            default_admin = user.User(
-                username="admin",
-                email="admin@example.com",
-                hashed_password=get_password_hash("admin123"),
-                is_active=True
-            )
-            db.add(default_admin)
-            db.commit()
-            print("Default admin user created: admin / admin123")
-    finally:
-        db.close()
+    # Optional: Create default admin user if explicitly enabled via environment variables
+    # This is disabled by default for security reasons
+    if settings.CREATE_DEFAULT_ADMIN and settings.DEFAULT_ADMIN_USERNAME and settings.DEFAULT_ADMIN_PASSWORD:
+        from app.core.security import get_password_hash
+
+        db = SessionLocal()
+        try:
+            admin_user = db.query(user.User).filter(user.User.username == settings.DEFAULT_ADMIN_USERNAME).first()
+            if not admin_user:
+                default_admin = user.User(
+                    username=settings.DEFAULT_ADMIN_USERNAME,
+                    email=settings.DEFAULT_ADMIN_EMAIL or "admin@example.com",
+                    hashed_password=get_password_hash(settings.DEFAULT_ADMIN_PASSWORD),
+                    is_active=True
+                )
+                db.add(default_admin)
+                db.commit()
+                print(f"Default admin user created: {settings.DEFAULT_ADMIN_USERNAME}")
+        finally:
+            db.close()

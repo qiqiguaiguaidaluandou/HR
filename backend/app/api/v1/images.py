@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, List
 import os
 import uuid
 import base64
 import httpx
+import asyncio
 
 from app.db.database import get_db
 from app.models.user import User
@@ -102,8 +103,7 @@ async def generate_images(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Generate images using Banana.dev Stable Diffusion API"""
-    images = []
+    """Generate images using Banana.dev Stable Diffusion API (concurrent)"""
 
     # Map aspect ratios to dimensions
     aspect_ratios = {
@@ -117,10 +117,9 @@ async def generate_images(
 
     width, height = aspect_ratios.get(request.aspect_ratio, (512, 512))
 
-    # Generate images
-    for i in range(request.image_count):
+    async def generate_single_image(index: int) -> Optional[Image]:
+        """Generate a single image and save to database"""
         try:
-            # Call Banana API to generate image
             base64_image = await generate_image_with_banana(
                 prompt=request.prompt,
                 width=width,
@@ -128,11 +127,9 @@ async def generate_images(
             )
 
             if base64_image:
-                # Save image to storage
                 filename = f"{uuid.uuid4().hex}.png"
                 image_url = save_base64_image(base64_image, filename)
 
-                # Create image record
                 new_image = Image(
                     user_id=current_user.id,
                     prompt=request.prompt,
@@ -140,27 +137,31 @@ async def generate_images(
                     aspect_ratio=request.aspect_ratio,
                     is_favorite=False
                 )
-                db.add(new_image)
-                images.append(new_image)
+                return new_image
             else:
-                # Create placeholder if generation fails
-                new_image = Image(
+                return Image(
                     user_id=current_user.id,
                     prompt=request.prompt,
                     image_url=f"https://placeholder.com/{width}x{height}?text=Generation+Failed",
                     aspect_ratio=request.aspect_ratio,
                     is_favorite=False
                 )
-                db.add(new_image)
-                images.append(new_image)
-
         except Exception as e:
-            print(f"Error generating image {i+1}: {e}")
-            continue
+            print(f"Error generating image {index+1}: {e}")
+            return None
 
+    # Generate all images concurrently
+    tasks = [generate_single_image(i) for i in range(request.image_count)]
+    results = await asyncio.gather(*tasks)
+
+    # Filter out failed generations
+    images = [img for img in results if img is not None]
+
+    # Add all images to database in a single transaction
+    db.add_all(images)
     db.commit()
 
-    # Refresh images
+    # Refresh images to get generated IDs
     for img in images:
         db.refresh(img)
 
@@ -175,7 +176,7 @@ def get_images(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get user's images"""
+    """Get user's images with pagination"""
     query = db.query(Image).filter(Image.user_id == current_user.id)
 
     if favorite_only:
@@ -184,7 +185,17 @@ def get_images(
     total = query.count()
     images = query.order_by(Image.created_at.desc()).offset(skip).limit(limit).all()
 
-    return {"images": images, "total": total}
+    # Calculate pagination metadata
+    page = (skip // limit) + 1 if limit > 0 else 1
+    total_pages = (total + limit - 1) // limit if limit > 0 else 1
+
+    return {
+        "images": images,
+        "total": total,
+        "page": page,
+        "page_size": limit,
+        "total_pages": total_pages
+    }
 
 
 @router.post("/{image_id}/favorite", response_model=ImageResponse)
@@ -267,3 +278,44 @@ async def upload_reference_image(
         f.write(content)
 
     return {"url": f"/images/{file_name}", "filename": file_name}
+
+
+@router.get("/{image_id}/download")
+def download_image(
+    image_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Download an image"""
+    image = db.query(Image).filter(
+        Image.id == image_id,
+        Image.user_id == current_user.id
+    ).first()
+
+    if not image:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Image not found"
+        )
+
+    if not image.image_url or not image.image_url.startswith("/images/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Image file not available for download"
+        )
+
+    filename = image.image_url.replace("/images/", "")
+    file_path = os.path.join(settings.IMAGE_STORAGE_PATH, filename)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Image file not found"
+        )
+
+    from fastapi.responses import FileResponse
+    return FileResponse(
+        file_path,
+        media_type="image/png",
+        filename=f"ai-image-{image_id}.png"
+    )

@@ -12,8 +12,8 @@ from app.core.security import (
     create_access_token,
     decode_token,
     oauth2_scheme,
-    settings
 )
+from app.core.config import settings
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 

@@ -1,9 +1,12 @@
 'use client';
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Sparkles, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { api } from '@/lib/api';
 
 export default function RegisterPage() {
+  const router = useRouter();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -13,12 +16,19 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setError('');
+    e.preventDefault();
+    setError('');
     if (password !== confirmPassword) { setError('两次输入的密码不一致'); return; }
     if (password.length < 6) { setError('密码长度至少为 6 位'); return; }
     setLoading(true);
-    // TODO: 添加注册逻辑
-    setLoading(false);
+    try {
+      await api.register(username, email, password);
+      router.push('/login');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '注册失败，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

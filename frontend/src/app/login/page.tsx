@@ -1,9 +1,12 @@
 'use client';
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Sparkles, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { api } from '@/lib/api';
 
 export default function LoginPage() {
+  const router = useRouter();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -11,9 +14,17 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault(); setError(''); setLoading(true);
-    // TODO: 添加登录逻辑
-    setLoading(false);
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      await api.login(username, password);
+      router.push('/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '登录失败，请检查用户名和密码');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
