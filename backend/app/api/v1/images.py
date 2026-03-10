@@ -1,12 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import Optional, List
+from typing import Optional
 import os
-import uuid
-import base64
-import httpx
-import asyncio
 
 from app.db.database import get_db
 from app.models.user import User
@@ -18,6 +14,9 @@ from app.schemas.image import (
 )
 from app.core.security import decode_token, oauth2_scheme
 from app.core.config import settings
+from app.core.exceptions import AppException
+from app.services.image_service import ImageService, ImageGenerationRequest
+from app.container import get_storage_service, get_image_service
 
 router = APIRouter(prefix="/images", tags=["Images"])
 
@@ -40,132 +39,48 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 
-def save_base64_image(base64_data: str, filename: str) -> str:
-    """Save base64 encoded image to storage and return the URL"""
-    # Create storage directory if not exists
-    storage_path = settings.IMAGE_STORAGE_PATH
-    os.makedirs(storage_path, exist_ok=True)
-
-    # Save file
-    file_path = os.path.join(storage_path, filename)
-    image_data = base64.b64decode(base64_data)
-    with open(file_path, "wb") as f:
-        f.write(image_data)
-
-    # Return URL (in production, use cloud storage or static file server)
-    return f"/images/{filename}"
-
-
-async def generate_image_with_banana(prompt: str, width: int = 1024, height: int = 1024) -> Optional[str]:
-    """Generate image using Banana.dev API"""
-    if not settings.BANANA_API_KEY or settings.BANANA_API_KEY == "your-banana-api-key":
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Banana API key not configured"
-        )
-
-    async with httpx.AsyncClient() as client:
-        try:
-            response = await client.post(
-                "https://api.banana.dev/api/v4/inference/stable-diffusion",
-                json={
-                    "api_key": settings.BANANA_API_KEY,
-                    "model_key": settings.BANANA_MODEL_KEY,
-                    "prompt": prompt,
-                    "width": width,
-                    "height": height,
-                    "num_inference_steps": 25,
-                    "guidance_scale": 7.5
-                },
-                timeout=120.0
-            )
-
-            if response.status_code != 200:
-                print(f"Banana API error: {response.status_code} - {response.text}")
-                return None
-
-            result = response.json()
-
-            # Banana API returns base64 encoded image
-            if result.get("outputs") and len(result["outputs"]) > 0:
-                return result["outputs"][0]  # Base64 image data
-
-            return None
-
-        except Exception as e:
-            print(f"Error calling Banana API: {e}")
-            return None
-
-
 @router.post("/generate", response_model=ImageListResponse)
 async def generate_images(
     request: ImageGenerateRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    image_service: ImageService = Depends(get_image_service)
 ):
-    """Generate images using Banana.dev Stable Diffusion API (concurrent)"""
+    """生成图片"""
+    try:
+        # 构建请求
+        gen_request = ImageGenerationRequest(
+            prompt=request.prompt,
+            aspect_ratio=request.aspect_ratio,
+            image_count=request.image_count,
+            reference_image=request.reference_image
+        )
 
-    # Map aspect ratios to dimensions
-    aspect_ratios = {
-        "1:1": (512, 512),
-        "4:3": (512, 384),
-        "3:4": (384, 512),
-        "3:2": (512, 341),
-        "16:9": (512, 288),
-        "9:16": (288, 512)
-    }
+        # 生成图片
+        images = await image_service.generate_images(
+            request=gen_request,
+            user=current_user,
+            db=db
+        )
 
-    width, height = aspect_ratios.get(request.aspect_ratio, (512, 512))
+        return {
+            "images": images,
+            "total": len(images),
+            "page": 1,
+            "page_size": request.image_count,
+            "total_pages": 1
+        }
 
-    async def generate_single_image(index: int) -> Optional[Image]:
-        """Generate a single image and save to database"""
-        try:
-            base64_image = await generate_image_with_banana(
-                prompt=request.prompt,
-                width=width,
-                height=height
-            )
-
-            if base64_image:
-                filename = f"{uuid.uuid4().hex}.png"
-                image_url = save_base64_image(base64_image, filename)
-
-                new_image = Image(
-                    user_id=current_user.id,
-                    prompt=request.prompt,
-                    image_url=image_url,
-                    aspect_ratio=request.aspect_ratio,
-                    is_favorite=False
-                )
-                return new_image
-            else:
-                return Image(
-                    user_id=current_user.id,
-                    prompt=request.prompt,
-                    image_url=f"https://placeholder.com/{width}x{height}?text=Generation+Failed",
-                    aspect_ratio=request.aspect_ratio,
-                    is_favorite=False
-                )
-        except Exception as e:
-            print(f"Error generating image {index+1}: {e}")
-            return None
-
-    # Generate all images concurrently
-    tasks = [generate_single_image(i) for i in range(request.image_count)]
-    results = await asyncio.gather(*tasks)
-
-    # Filter out failed generations
-    images = [img for img in results if img is not None]
-
-    # Add all images to database in a single transaction
-    db.add_all(images)
-    db.commit()
-
-    # Refresh images to get generated IDs
-    for img in images:
-        db.refresh(img)
-
-    return {"images": images, "total": len(images)}
+    except AppException as e:
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.message
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate images: {str(e)}"
+        )
 
 
 @router.get("", response_model=ImageListResponse)
@@ -174,18 +89,18 @@ def get_images(
     limit: int = 20,
     favorite_only: bool = False,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    image_service: ImageService = Depends(get_image_service)
 ):
-    """Get user's images with pagination"""
-    query = db.query(Image).filter(Image.user_id == current_user.id)
+    """获取用户的图片列表"""
+    images, total = image_service.get_user_images(
+        db=db,
+        user=current_user,
+        skip=skip,
+        limit=limit,
+        favorite_only=favorite_only
+    )
 
-    if favorite_only:
-        query = query.filter(Image.is_favorite == True)
-
-    total = query.count()
-    images = query.order_by(Image.created_at.desc()).offset(skip).limit(limit).all()
-
-    # Calculate pagination metadata
     page = (skip // limit) + 1 if limit > 0 else 1
     total_pages = (total + limit - 1) // limit if limit > 0 else 1
 
@@ -202,82 +117,83 @@ def get_images(
 def toggle_favorite(
     image_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    image_service: ImageService = Depends(get_image_service)
 ):
-    """Toggle image favorite status"""
-    image = db.query(Image).filter(
-        Image.id == image_id,
-        Image.user_id == current_user.id
-    ).first()
-
-    if not image:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Image not found"
+    """切换图片收藏状态"""
+    try:
+        image = image_service.toggle_favorite(
+            db=db,
+            user=current_user,
+            image_id=image_id
         )
-
-    image.is_favorite = not image.is_favorite
-    db.commit()
-    db.refresh(image)
-    return image
+        return image
+    except AppException as e:
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.message
+        )
 
 
 @router.delete("/{image_id}")
 def delete_image(
     image_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    image_service: ImageService = Depends(get_image_service)
 ):
-    """Delete an image"""
-    image = db.query(Image).filter(
-        Image.id == image_id,
-        Image.user_id == current_user.id
-    ).first()
-
-    if not image:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Image not found"
+    """删除图片"""
+    try:
+        image_service.delete_image(
+            db=db,
+            user=current_user,
+            image_id=image_id
         )
-
-    # Delete local file if exists
-    if image.image_url and image.image_url.startswith("/images/"):
-        filename = image.image_url.replace("/images/", "")
-        file_path = os.path.join(settings.IMAGE_STORAGE_PATH, filename)
-        if os.path.exists(file_path):
-            os.remove(file_path)
-
-    db.delete(image)
-    db.commit()
-    return {"message": "Image deleted successfully"}
+        return {"message": "Image deleted successfully"}
+    except AppException as e:
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.message
+        )
 
 
 @router.post("/upload")
 async def upload_reference_image(
     file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    storage_service=Depends(get_storage_service)
 ):
-    """Upload a reference image"""
-    # Validate file type
+    """上传参考图片"""
+    # 验证文件类型
     if not file.content_type.startswith("image/"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File must be an image"
         )
 
-    # Save file to storage
-    storage_path = settings.IMAGE_STORAGE_PATH
-    os.makedirs(storage_path, exist_ok=True)
-
-    file_ext = file.filename.split(".")[-1] if file.filename else "png"
-    file_name = f"ref_{uuid.uuid4().hex}.{file_ext}"
-    file_path = os.path.join(storage_path, file_name)
-
-    with open(file_path, "wb") as f:
+    try:
+        # 读取文件内容
         content = await file.read()
-        f.write(content)
 
-    return {"url": f"/images/{file_name}", "filename": file_name}
+        # 保存文件
+        stored = await storage_service.save_uploaded_file(
+            file_content=content,
+            filename=file.filename or "reference.png",
+            prefix="ref"
+        )
+
+        return {"url": stored.url, "filename": stored.filename}
+
+    except AppException as e:
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.message
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload image: {str(e)}"
+        )
 
 
 @router.get("/{image_id}/download")
@@ -286,7 +202,7 @@ def download_image(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Download an image"""
+    """下载图片"""
     image = db.query(Image).filter(
         Image.id == image_id,
         Image.user_id == current_user.id
@@ -304,16 +220,15 @@ def download_image(
             detail="Image file not available for download"
         )
 
-    filename = image.image_url.replace("/images/", "")
-    file_path = os.path.join(settings.IMAGE_STORAGE_PATH, filename)
+    storage = get_storage_service()
+    file_path = storage.get_file_path(image.image_url)
 
-    if not os.path.exists(file_path):
+    if not file_path or not os.path.exists(file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Image file not found"
         )
 
-    from fastapi.responses import FileResponse
     return FileResponse(
         file_path,
         media_type="image/png",

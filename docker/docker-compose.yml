@@ -9,7 +9,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://backend:8000
     depends_on:
       - backend
     restart: unless-stopped
@@ -24,10 +24,15 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:password@db:5432/ai_image_db
       - SECRET_KEY=your-super-secret-key-change-in-production
+      - IMAGE_GENERATOR_PROVIDER=gemini
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - GEMINI_MODEL=gemini-2.0-flash-exp
       - BANANA_API_KEY=${BANANA_API_KEY:-}
-      - BANANA_MODEL_KEY=${BANANA_MODEL_KEY:-stable-diffusion-v1-5}
+      - BANANA_MODEL_KEY=stable-diffusion-v1-5
+      - REPLICATE_API_KEY=${REPLICATE_API_KEY:-}
       - IMAGE_STORAGE_PATH=/app/generated_images
+      - LOG_LEVEL=INFO
+      - CORS_ORIGINS=["http://localhost:3000","http://frontend:3000"]
     volumes:
       - generated_images:/app/generated_images
     depends_on:
@@ -44,7 +49,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "5433:5432"
     restart: unless-stopped
 
 volumes:

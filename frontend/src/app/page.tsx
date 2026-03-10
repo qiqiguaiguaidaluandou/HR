@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Image as ImageIcon, History, Bookmark, Loader2 } from 'lucide-react';
 import { SidebarItem } from '@/components/SidebarItem';
 import { AspectRatioButton } from '@/components/AspectRatioButton';
@@ -12,6 +13,7 @@ import { GalleryHeader } from '@/components/GalleryHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { ImageList } from '@/components/ImageList';
 import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ImageItem {
   id: number;
@@ -23,14 +25,38 @@ interface ImageItem {
 }
 
 export default function Home() {
+  const router = useRouter();
+  const { isAuthenticated, loading } = useAuth();
   const [activeTab, setActiveTab] = useState('generate');
   const [description, setDescription] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
   const [imageCount, setImageCount] = useState(1);
+  const [referenceImage, setReferenceImage] = useState('');
   const [images, setImages] = useState<ImageItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const aspectRatios = ['1:1', '4:3', '3:4', '3:2', '16:9', '9:16'];
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!loading && !isAuthenticated) {
+      router.push('/login');
+    }
+  }, [loading, isAuthenticated, router]);
+
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+      </div>
+    );
+  }
+
+  // Redirect if not authenticated
+  if (!isAuthenticated) {
+    return null;
+  }
 
   // Load images from API
   const loadImages = async (favoriteOnly: boolean = false) => {
@@ -59,11 +85,12 @@ export default function Home() {
 
     setIsGenerating(true);
     try {
-      const response = await api.generateImages(description, aspectRatio, imageCount);
+      const response = await api.generateImages(description, aspectRatio, imageCount, referenceImage);
       if (response.images && response.images.length > 0) {
         setImages(prev => [...response.images, ...prev]);
         setActiveTab('history');
         setDescription('');
+        setReferenceImage('');
       }
     } catch (error) {
       console.error('Failed to generate images:', error);
@@ -167,7 +194,7 @@ export default function Home() {
           <section className="w-[360px] border-r border-gray-200 bg-white flex flex-col overflow-y-auto custom-scrollbar">
             <div className="p-6 flex flex-col gap-8">
               <DescriptionInput value={description} onChange={setDescription} />
-              <ReferenceUploader />
+              <ReferenceUploader value={referenceImage} onChange={setReferenceImage} />
               <div className="flex flex-col gap-4">
                 <h2 className="text-sm font-semibold text-gray-800">比例</h2>
                 <div className="grid grid-cols-3 gap-2">

@@ -91,10 +91,15 @@ class ApiClient {
     this.setToken(null);
   }
 
-  async generateImages(prompt: string, aspectRatio: string, imageCount: number) {
+  async generateImages(prompt: string, aspectRatio: string, imageCount: number, referenceImage?: string) {
     return this.request('/api/v1/images/generate', {
       method: 'POST',
-      body: { prompt, aspect_ratio: aspectRatio, image_count: imageCount },
+      body: {
+        prompt,
+        aspect_ratio: aspectRatio,
+        image_count: imageCount,
+        reference_image: referenceImage || null
+      },
     });
   }
 
@@ -112,6 +117,25 @@ class ApiClient {
     return this.request(`/api/v1/images/${imageId}`, {
       method: 'DELETE',
     });
+  }
+
+  async uploadImage(file: File) {
+    const token = this.getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch(`${API_URL}/api/v1/images/upload`, {
+      method: 'POST',
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
+      throw new Error(error.detail || 'Upload failed');
+    }
+
+    return response.json();
   }
 }
 
