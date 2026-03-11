@@ -62,7 +62,7 @@ class GeminiImageGenerator(BaseImageGenerator):
                             "role": "user",
                             "parts": [
                                 {
-                                    "inline_data": {
+                                    "inlineData": {
                                         "mime_type": "image/jpeg",
                                         "data": image_data
                                     }
@@ -82,7 +82,7 @@ class GeminiImageGenerator(BaseImageGenerator):
             request_body = {
                 "contents": contents,
                 "generationConfig": {
-                    "responseModalities": "image",
+                    "responseModalities": ["image"],
                     "responseMimeType": "image/png"
                 }
             }
