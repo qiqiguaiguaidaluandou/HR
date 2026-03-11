@@ -25,10 +25,10 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://postgres:password@db:5432/ai_image_db
-      - SECRET_KEY=your-super-secret-key-change-in-production
+      - SECRET_KEY=ai-image-production-secret-key-2024
       - IMAGE_GENERATOR_PROVIDER=gemini
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - GEMINI_MODEL=gemini-2.0-flash-exp
+      - GEMINI_MODEL=gemini-2.5-flash-image
       - BANANA_API_KEY=${BANANA_API_KEY:-}
       - BANANA_MODEL_KEY=stable-diffusion-v1-5
       - REPLICATE_API_KEY=${REPLICATE_API_KEY:-}

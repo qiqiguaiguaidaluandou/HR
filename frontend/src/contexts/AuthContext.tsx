@@ -27,21 +27,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = api.getToken();
-    if (token) {
-      api.getCurrentUser()
-        .then((userData) => {
+    const checkAuth = async () => {
+      const token = api.getToken();
+      if (token) {
+        try {
+          const userData = await api.getCurrentUser();
           setUser(userData);
-        })
-        .catch(() => {
+        } catch (error) {
+          console.error('Auth check failed:', error);
           api.logout();
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    } else {
+        }
+      }
       setLoading(false);
-    }
+    };
+
+    checkAuth();
   }, []);
 
   const login = async (username: string, password: string) => {
