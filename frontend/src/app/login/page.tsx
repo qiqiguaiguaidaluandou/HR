@@ -3,10 +3,11 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Sparkles, Eye, EyeOff, Loader2 } from 'lucide-react';
-import { api } from '@/lib/api';
+import { useAuth } from '@/contexts/AuthContext';
 
 export default function LoginPage() {
   const router = useRouter();
+  const { login: authLogin } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -18,7 +19,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await api.login(username, password);
+      await authLogin(username, password);
       router.push('/');
     } catch (err) {
       setError(err instanceof Error ? err.message : '登录失败，请检查用户名和密码');
