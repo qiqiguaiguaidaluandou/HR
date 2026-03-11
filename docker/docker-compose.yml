@@ -6,12 +6,12 @@ services:
       context: ../frontend
       dockerfile: Dockerfile
       args:
-        - NEXT_PUBLIC_API_URL=http://localhost:8000
+        - NEXT_PUBLIC_API_URL=http://172.10.42.142:8000
     container_name: ai-image-frontend
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_API_URL=http://172.10.42.142:8000
     depends_on:
       - backend
     restart: unless-stopped
@@ -34,7 +34,7 @@ services:
       - REPLICATE_API_KEY=${REPLICATE_API_KEY:-}
       - IMAGE_STORAGE_PATH=/app/generated_images
       - LOG_LEVEL=INFO
-      - CORS_ORIGINS=["http://localhost:3000","http://frontend:3000"]
+      - CORS_ORIGINS=["http://localhost:3000","http://172.10.42.142:3000"]
     volumes:
       - generated_images:/app/generated_images
     depends_on:
