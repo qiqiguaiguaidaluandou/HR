@@ -28,19 +28,12 @@ class Settings(BaseSettings):
                 return [origin.strip() for origin in v.split(',')]
         return v
 
-    # Image Generator Provider (banana, gemini, replicate)
+    # Image Generator Provider (gemini)
     IMAGE_GENERATOR_PROVIDER: str = "gemini"
 
     # Gemini API (primary provider)
     GEMINI_API_KEY: Optional[str] = None
     GEMINI_MODEL: str = "gemini-2.0-flash-exp"  # 支持 gemini-2.5-flash-image 等
-
-    # Banana.dev API
-    BANANA_API_KEY: Optional[str] = None
-    BANANA_MODEL_KEY: str = "stable-diffusion-v1-5"
-
-    # Replicate API
-    REPLICATE_API_KEY: Optional[str] = None
 
     # Image storage
     IMAGE_STORAGE_PATH: str = "./generated_images"

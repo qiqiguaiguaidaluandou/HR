@@ -13,7 +13,7 @@ from app.schemas.image import (
     ImageListResponse
 )
 from app.core.security import decode_token, oauth2_scheme
-from app.core.config import settings
+from app.config import settings
 from app.core.exceptions import AppException
 from app.services.image_service import ImageService, ImageGenerationRequest
 from app.container import get_storage_service, get_image_service
@@ -174,6 +174,14 @@ async def upload_reference_image(
     try:
         # 读取文件内容
         content = await file.read()
+
+        # 验证文件大小（最大2MB）
+        MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
+        if len(content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File size exceeds 2MB limit"
+            )
 
         # 保存文件
         stored = await storage_service.save_uploaded_file(

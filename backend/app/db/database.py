@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from app.core.config import settings
+from app.config import settings
 
 engine = create_engine(settings.DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -35,7 +35,8 @@ def init_db():
                     username=settings.DEFAULT_ADMIN_USERNAME,
                     email=settings.DEFAULT_ADMIN_EMAIL or "admin@example.com",
                     hashed_password=get_password_hash(settings.DEFAULT_ADMIN_PASSWORD),
-                    is_active=True
+                    is_active=True,
+                    is_admin=True
                 )
                 db.add(default_admin)
                 db.commit()

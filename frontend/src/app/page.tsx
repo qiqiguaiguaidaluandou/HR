@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Image as ImageIcon, History, Bookmark, Loader2 } from 'lucide-react';
+import { Image as ImageIcon, History, Bookmark, Loader2, Settings, LogOut, Shield } from 'lucide-react';
 import { SidebarItem } from '@/components/SidebarItem';
 import { AspectRatioButton } from '@/components/AspectRatioButton';
 import { DescriptionInput } from '@/components/DescriptionInput';
@@ -26,7 +26,7 @@ interface ImageItem {
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, isAdmin, loading, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('generate');
   const [description, setDescription] = useState('');
   const [aspectRatio, setAspectRatio] = useState('1:1');
@@ -187,7 +187,10 @@ export default function Home() {
           <SidebarItem icon={<ImageIcon size={22} />} label="图片生成" active={activeTab === 'generate'} onClick={() => setActiveTab('generate')} />
           <SidebarItem icon={<History size={22} />} label="生成历史" active={activeTab === 'history'} onClick={() => setActiveTab('history')} />
           <SidebarItem icon={<Bookmark size={22} />} label="我的收藏" active={activeTab === 'bookmarks'} onClick={() => setActiveTab('bookmarks')} />
+          <SidebarItem icon={<Settings size={22} />} label="设置" active={activeTab === 'settings'} onClick={() => router.push('/settings')} />
+          {isAdmin && <SidebarItem icon={<Shield size={22} />} label="管理" active={activeTab === 'admin'} onClick={() => router.push('/admin')} />}
         </div>
+        <SidebarItem icon={<LogOut size={22} />} label="退出" onClick={() => { logout(); router.push('/login'); }} />
       </aside>
       <main className="flex-1 flex overflow-hidden">
         {activeTab === 'generate' && (

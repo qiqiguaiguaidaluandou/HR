@@ -76,13 +76,6 @@ class ApiClient {
     return data;
   }
 
-  async register(username: string, email: string, password: string) {
-    return this.request('/api/v1/auth/register', {
-      method: 'POST',
-      body: { username, email, password },
-    });
-  }
-
   async getCurrentUser() {
     return this.request('/api/v1/auth/me');
   }
@@ -136,6 +129,36 @@ class ApiClient {
     }
 
     return response.json();
+  }
+
+  // 修改密码
+  async changePassword(oldPassword: string, newPassword: string) {
+    return this.request('/api/v1/auth/password', {
+      method: 'PUT',
+      body: { old_password: oldPassword, new_password: newPassword },
+    });
+  }
+
+  // ============ 管理员 API ============
+
+  // 获取所有用户
+  async getAllUsers() {
+    return this.request('/api/v1/auth/admin/users');
+  }
+
+  // 管理员创建用户
+  async createUser(username: string, email: string, password: string, isAdmin: boolean = false) {
+    return this.request('/api/v1/auth/admin/users', {
+      method: 'POST',
+      body: { username, email, password, is_admin: isAdmin },
+    });
+  }
+
+  // 管理员删除用户
+  async deleteUser(userId: number) {
+    return this.request(`/api/v1/auth/admin/users/${userId}`, {
+      method: 'DELETE',
+    });
   }
 }
 

@@ -8,6 +8,7 @@ interface User {
   username: string;
   email: string;
   is_active: boolean;
+  is_admin: boolean;
   created_at: string;
 }
 
@@ -15,9 +16,9 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -50,11 +51,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(userData);
   };
 
-  const register = async (username: string, email: string, password: string) => {
-    await api.register(username, email, password);
-    await login(username, password);
-  };
-
   const logout = () => {
     api.logout();
     setUser(null);
@@ -66,9 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         login,
-        register,
         logout,
         isAuthenticated: !!user,
+        isAdmin: user?.is_admin || false,
       }}
     >
       {children}

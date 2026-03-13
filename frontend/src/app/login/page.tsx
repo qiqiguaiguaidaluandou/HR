@@ -1,6 +1,5 @@
 'use client';
 import React, { useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Sparkles, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -51,7 +50,6 @@ export default function LoginPage() {
             {loading ? <><Loader2 size={18} className="animate-spin" />登录中...</> : '登录'}
           </button>
         </form>
-        <p className="text-gray-500 text-center mt-6">还没有账号？<Link href="/register" className="text-indigo-600 hover:text-indigo-500">立即注册</Link></p>
       </div>
     </div>
   );

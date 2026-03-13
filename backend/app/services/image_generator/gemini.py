@@ -1,6 +1,5 @@
 import httpx
 import base64
-import json
 from typing import Optional
 
 from app.config import settings

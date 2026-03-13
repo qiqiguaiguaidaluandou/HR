@@ -29,12 +29,13 @@ services:
       - IMAGE_GENERATOR_PROVIDER=gemini
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GEMINI_MODEL=gemini-2.5-flash-image
-      - BANANA_API_KEY=${BANANA_API_KEY:-}
-      - BANANA_MODEL_KEY=stable-diffusion-v1-5
-      - REPLICATE_API_KEY=${REPLICATE_API_KEY:-}
       - IMAGE_STORAGE_PATH=/app/generated_images
       - LOG_LEVEL=INFO
       - CORS_ORIGINS=["http://localhost:3000","http://172.10.42.142:3000"]
+      - CREATE_DEFAULT_ADMIN=true
+      - DEFAULT_ADMIN_USERNAME=admin
+      - DEFAULT_ADMIN_PASSWORD=admin123
+      - DEFAULT_ADMIN_EMAIL=admin@example.com
     volumes:
       - generated_images:/app/generated_images
     depends_on:

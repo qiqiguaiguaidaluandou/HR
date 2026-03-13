@@ -1,10 +1,6 @@
 from typing import Optional
-from functools import lru_cache
-
-from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.db.database import SessionLocal
 from app.services.image_generator.factory import ImageGeneratorFactory
 from app.services.storage import StorageService
 from app.services.image_service import ImageService
@@ -21,10 +17,6 @@ class Container:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
-
-    def get_db(self) -> Session:
-        """获取数据库会话"""
-        return SessionLocal()
 
     @property
     def storage_service(self) -> StorageService:
@@ -55,15 +47,6 @@ class Container:
 
 # 全局容器实例
 container = Container()
-
-
-def get_db() -> Session:
-    """FastAPI 依赖注入函数"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 
 def get_storage_service() -> StorageService:

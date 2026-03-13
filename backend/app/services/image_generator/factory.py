@@ -4,8 +4,6 @@ from app.config import settings
 from app.core.logs import get_logger
 from .base import BaseImageGenerator
 from .gemini import GeminiImageGenerator
-from .banana import BananaImageGenerator
-from .replicate import ReplicateImageGenerator
 
 logger = get_logger(__name__)
 
@@ -15,8 +13,6 @@ class ImageGeneratorFactory:
 
     _generators = {
         "gemini": GeminiImageGenerator,
-        "banana": BananaImageGenerator,
-        "replicate": ReplicateImageGenerator,
     }
 
     @classmethod
@@ -28,7 +24,7 @@ class ImageGeneratorFactory:
         根据配置创建图片生成器
 
         Args:
-            provider: 提供者名称 (gemini, banana, replicate)
+            provider: 提供者名称 (gemini)
 
         Returns:
             BaseImageGenerator 实例

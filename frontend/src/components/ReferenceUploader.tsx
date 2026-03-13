@@ -27,9 +27,9 @@ export function ReferenceUploader({ value, onChange }: ReferenceUploaderProps) {
       return;
     }
 
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      setError('图片大小不能超过 10MB');
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setError('图片大小不能超过 2MB');
       return;
     }
 
