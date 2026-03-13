@@ -7,6 +7,10 @@ import json
 class Settings(BaseSettings):
     """应用配置"""
 
+    model_config = {
+        "extra": "ignore",  # 忽略未定义的配置字段
+    }
+
     # Database
     DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/ai_image_db"
 
