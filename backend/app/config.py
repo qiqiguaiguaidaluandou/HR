@@ -7,10 +7,6 @@ import json
 class Settings(BaseSettings):
     """应用配置"""
 
-    model_config = {
-        "extra": "ignore",  # 忽略未定义的配置字段
-    }
-
     # Database
     DATABASE_URL: str = "postgresql://postgres:password@localhost:5432/ai_image_db"
 
@@ -56,9 +52,11 @@ class Settings(BaseSettings):
     DEFAULT_ADMIN_PASSWORD: Optional[str] = None
     DEFAULT_ADMIN_EMAIL: Optional[str] = None
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    model_config = {
+        "extra": "ignore",  # 忽略未定义的配置字段
+        "env_file": ".env",
+        "case_sensitive": True,
+    }
 
 
 settings = Settings()
